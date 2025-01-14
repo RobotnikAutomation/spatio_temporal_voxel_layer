@@ -31,6 +31,7 @@ add_service_files(DIRECTORY msgs
 
 generate_dynamic_reconfigure_options(
   cfg/SpatioTemporalVoxelLayer.cfg
+  cfg/MeasurementBuffer.cfg
 )
 
 generate_messages(

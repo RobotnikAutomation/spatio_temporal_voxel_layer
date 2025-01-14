@@ -81,7 +81,7 @@ void SpatioTemporalVoxelLayer::onInitialize(void)
   nh.param("observation_sources", topics_string, std::string(""));
   // timeout in seconds for transforms
   nh.param("transform_tolerance", transform_tolerance, 0.2);
-  // whether to default on
+  // whether to default on 
   nh.param("enabled", _enabled, true);
   enabled_ = _enabled; // costmap_2d for some unexplicable reason uses globals
   // publish the voxel grid to visualize
@@ -230,7 +230,7 @@ void SpatioTemporalVoxelLayer::onInitialize(void)
         transform_tolerance, min_z, max_z, vFOV, vFOVPadding, hFOV,       \
         decay_acceleration, marking, clearing, _voxel_size,               \
         filter, voxel_min_points, enabled, clear_after_reading,           \
-        model_type)));
+        model_type, source_node)));
 
     // Add buffer to marking observation buffers
     if (marking == true)

@@ -66,7 +66,8 @@ MeasurementBuffer::MeasurementBuffer(const std::string& topic_name,          \
                                      const int& voxel_min_points,            \
                                      const bool& enabled,                    \
                                      const bool& clear_buffer_after_reading, \
-                                     const ModelType& model_type) :
+                                     const ModelType& model_type,            \
+                                     ros::NodeHandle nh) :
 /*****************************************************************************/
     _buffer(tf), _observation_keep_time(observation_keep_time),
     _expected_update_rate(expected_update_rate),_last_updated(ros::Time::now()), 
@@ -79,8 +80,15 @@ MeasurementBuffer::MeasurementBuffer(const std::string& topic_name,          \
     _marking(marking), _clearing(clearing), _voxel_size(voxel_size),
     _filter(filter), _voxel_min_points(voxel_min_points),
     _enabled(enabled), _clear_buffer_after_reading(clear_buffer_after_reading),
-    _model_type(model_type)
+    _model_type(model_type), _node(nh)
 {
+  // Dynamic reconfigure
+  dynamic_reconfigure::Server<spatio_temporal_voxel_layer::MeasurementBufferConfig> *_dynamic_reconfigure_server;
+  _dynamic_reconfigure_server = new dynamic_reconfigure::Server<spatio_temporal_voxel_layer::MeasurementBufferConfig>(_node);
+  dynamic_reconfigure::Server<spatio_temporal_voxel_layer::MeasurementBufferConfig>::CallbackType f;
+  f = boost::bind(&MeasurementBuffer::DynamicReconfigureCallback, this, _1, _2);
+  _dynamic_reconfigure_server->setCallback(f);
+
 }
 
 /*****************************************************************************/
@@ -235,6 +243,12 @@ void MeasurementBuffer::RemoveStaleObservations(void)
       return;
     }
   }
+}
+
+void MeasurementBuffer::DynamicReconfigureCallback(spatio_temporal_voxel_layer::MeasurementBufferConfig &config , uint32_t level)
+{
+  _min_obstacle_height = config.min_obstacle_height;
+  _max_obstacle_height = config.max_obstacle_height;
 }
 
 /*****************************************************************************/
