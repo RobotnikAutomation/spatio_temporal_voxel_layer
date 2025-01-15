@@ -67,7 +67,7 @@ MeasurementBuffer::MeasurementBuffer(const std::string& topic_name,          \
                                      const bool& enabled,                    \
                                      const bool& clear_buffer_after_reading, \
                                      const ModelType& model_type,            \
-                                     ros::NodeHandle nh) :
+                                     ros::NodeHandle& nh) :
 /*****************************************************************************/
     _buffer(tf), _observation_keep_time(observation_keep_time),
     _expected_update_rate(expected_update_rate),_last_updated(ros::Time::now()), 
@@ -83,9 +83,8 @@ MeasurementBuffer::MeasurementBuffer(const std::string& topic_name,          \
     _model_type(model_type), _node(nh)
 {
   // Dynamic reconfigure
-  dynamic_reconfigure::Server<spatio_temporal_voxel_layer::MeasurementBufferConfig> *_dynamic_reconfigure_server;
-  _dynamic_reconfigure_server = new dynamic_reconfigure::Server<spatio_temporal_voxel_layer::MeasurementBufferConfig>(_node);
-  dynamic_reconfigure::Server<spatio_temporal_voxel_layer::MeasurementBufferConfig>::CallbackType f;
+  _dynamic_reconfigure_server = new dynamicReconfigureServerType(_node);
+  dynamicReconfigureServerType::CallbackType f;
   f = boost::bind(&MeasurementBuffer::DynamicReconfigureCallback, this, _1, _2);
   _dynamic_reconfigure_server->setCallback(f);
 
@@ -95,6 +94,11 @@ MeasurementBuffer::MeasurementBuffer(const std::string& topic_name,          \
 MeasurementBuffer::~MeasurementBuffer(void)
 /*****************************************************************************/
 {
+  if(_dynamic_reconfigure_server)
+  {
+    delete _dynamic_reconfigure_server;
+    _dynamic_reconfigure_server = nullptr;
+  }
 }
 
 /*****************************************************************************/

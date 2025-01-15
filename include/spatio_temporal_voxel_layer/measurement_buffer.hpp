@@ -110,7 +110,7 @@ public:
                     const bool& enabled,                    \
                     const bool& clear_buffer_after_reading, \
                     const ModelType& model_type,            \
-                    ros::NodeHandle nh);
+                    ros::NodeHandle& nh);
 
   ~MeasurementBuffer(void);
 
@@ -142,7 +142,7 @@ private:
   void DynamicReconfigureCallback(spatio_temporal_voxel_layer::MeasurementBufferConfig &config , uint32_t level);
   
   ros::NodeHandle _node;
-
+  dynamicReconfigureServerType* _dynamic_reconfigure_server;
   tf2_ros::Buffer& _buffer;
   const ros::Duration _observation_keep_time, _expected_update_rate;
   boost::recursive_mutex _lock;
