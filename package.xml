@@ -1,10 +1,11 @@
 <?xml version="1.0"?>
 <package>
   <name>spatio_temporal_voxel_layer</name>
-  <version>1.4.5</version>
+  <version>1.5.0</version>
   <description>The spatio-temporal 3D obstacle costmap package</description>
 
   <maintainer email="stevenmacenski@gmail.com">Steve Macenski</maintainer>
+  <maintainer email="rcarta@robotnik.es">Roberto Carta</maintainer>
 
  <license>LGPL v2.1</license>
 

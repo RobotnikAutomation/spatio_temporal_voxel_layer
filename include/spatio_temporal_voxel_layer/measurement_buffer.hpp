@@ -41,6 +41,7 @@
 
 // measurement structs
 #include <spatio_temporal_voxel_layer/measurement_reading.h>
+#include <spatio_temporal_voxel_layer/MeasurementBufferConfig.h>
 // PCL
 #include <pcl_ros/transforms.h>
 #include <pcl/filters/voxel_grid.h>
@@ -53,6 +54,7 @@
 // ROS
 #include <ros/ros.h>
 #include <ros/time.h>
+#include <dynamic_reconfigure/server.h>
 // TF
 #include <tf2_ros/buffer.h>
 #include "message_filters/subscriber.h"
@@ -77,6 +79,8 @@ enum class Filters
 // conveniences for line lengths
 typedef std::list<observation::MeasurementReading>::iterator readings_iter;
 typedef sensor_msgs::PointCloud2::Ptr point_cloud_ptr;
+typedef spatio_temporal_voxel_layer::MeasurementBufferConfig dynamicReconfigureType;
+typedef dynamic_reconfigure::Server<dynamicReconfigureType> dynamicReconfigureServerType;
 
 // Measurement buffer
 class MeasurementBuffer
@@ -105,7 +109,8 @@ public:
                     const int& voxel_min_points,            \
                     const bool& enabled,                    \
                     const bool& clear_buffer_after_reading, \
-                    const ModelType& model_type);
+                    const ModelType& model_type,            \
+                    ros::NodeHandle& nh);
 
   ~MeasurementBuffer(void);
 
@@ -133,6 +138,11 @@ private:
   // Removing old observations from buffer
   void RemoveStaleObservations(void);
 
+  // Dynamic reconfigure
+  void DynamicReconfigureCallback(spatio_temporal_voxel_layer::MeasurementBufferConfig &config , uint32_t level);
+  
+  ros::NodeHandle _node;
+  dynamicReconfigureServerType* _dynamic_reconfigure_server;
   tf2_ros::Buffer& _buffer;
   const ros::Duration _observation_keep_time, _expected_update_rate;
   boost::recursive_mutex _lock;
