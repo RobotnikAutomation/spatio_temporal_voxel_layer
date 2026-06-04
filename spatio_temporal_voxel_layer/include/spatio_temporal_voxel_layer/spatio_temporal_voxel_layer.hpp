@@ -181,13 +181,14 @@ private:
   std::unique_ptr<rclcpp::Duration> _map_save_duration;
   rclcpp::Time _last_map_save_time;
   std::string _global_frame;
-  double _voxel_size, _voxel_decay;
+  double _voxel_size, _voxel_decay, _persistence_delay;
   int _combination_method, _mark_threshold;
   volume_grid::GlobalDecayModel _decay_model;
   bool _update_footprint_enabled, _enabled;
   std::vector<geometry_msgs::msg::Point> _transformed_footprint;
   std::vector<observation::MeasurementReading> _static_observations;
   std::unique_ptr<volume_grid::SpatioTemporalVoxelGrid> _voxel_grid;
+  openvdb::DoubleGrid::Ptr _birth_grid;
   boost::recursive_mutex _voxel_grid_lock;
 
   std::string _topics_string;

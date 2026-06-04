@@ -119,6 +119,9 @@ void SpatioTemporalVoxelLayer::onInitialize(void)
   // decay param
   declareParameter("voxel_decay", rclcpp::ParameterValue(-1.0));
   node->get_parameter(name_ + ".voxel_decay", _voxel_decay);
+  // minimum residence time in a voxel before projecting as lethal obstacle
+  declareParameter("persistence_delay", rclcpp::ParameterValue(5.0));
+  node->get_parameter(name_ + ".persistence_delay", _persistence_delay);
   // whether to map or navigate
   declareParameter("mapping_mode", rclcpp::ParameterValue(false));
   node->get_parameter(name_ + ".mapping_mode", _mapping_mode);
@@ -160,6 +163,7 @@ void SpatioTemporalVoxelLayer::onInitialize(void)
   _voxel_grid = std::make_unique<volume_grid::SpatioTemporalVoxelGrid>(
     node->get_clock(), _voxel_size, static_cast<double>(default_value_), _decay_model,
     _voxel_decay, _publish_voxels);
+  _birth_grid = _voxel_grid->GetBirthGrid();
 
   matchSize();
 
@@ -707,6 +711,8 @@ void SpatioTemporalVoxelLayer::UpdateROSCostmap(
 {
   // grabs map of occupied cells from grid and adds to costmap_
   Costmap2D::resetMaps();
+  auto node = node_.lock();
+  const double current_time = node ? node->now().seconds() : 0.0;
 
   std::unordered_map<volume_grid::occupany_cell, uint>::iterator it;
   for (it = _voxel_grid->GetFlattenedCostmap()->begin();
@@ -716,6 +722,11 @@ void SpatioTemporalVoxelLayer::UpdateROSCostmap(
     if (static_cast<int>(it->second) >= _mark_threshold &&
       worldToMap(it->first.x, it->first.y, map_x, map_y))
     {
+      if (!_voxel_grid->IsCellPastPersistenceDelay(
+          it->first.x, it->first.y, current_time, _persistence_delay))
+      {
+        continue;
+      }
       costmap_[getIndex(map_x, map_y)] = nav2_costmap_2d::LETHAL_OBSTACLE;
       touch(it->first.x, it->first.y, min_x, min_y, max_x, max_y);
     }
@@ -905,6 +916,12 @@ SpatioTemporalVoxelLayer::dynamicParametersCallback(std::vector<rclcpp::Paramete
             }
           }
         }
+      }
+    }
+
+    if (type == ParameterType::PARAMETER_DOUBLE) {
+      if (name == name_ + "." + "persistence_delay") {
+        _persistence_delay = parameter.as_double();
       }
     }
 

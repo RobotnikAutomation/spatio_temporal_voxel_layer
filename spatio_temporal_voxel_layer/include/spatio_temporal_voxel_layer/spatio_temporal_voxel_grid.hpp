@@ -143,6 +143,10 @@ public:
   // Get the pointcloud of the underlying occupancy grid
   void GetOccupancyPointCloud(std::unique_ptr<sensor_msgs::msg::PointCloud2> & pc2);
   std::unordered_map<occupany_cell, uint> * GetFlattenedCostmap();
+  bool IsCellPastPersistenceDelay(
+    const double & x, const double & y,
+    const double & current_time, const double & persistence_delay) const;
+  openvdb::DoubleGrid::Ptr GetBirthGrid() const;
 
   // Clear the grid
   bool ResetGrid(void);
@@ -180,11 +184,13 @@ protected:
   rclcpp::Clock::SharedPtr _clock;
 
   mutable openvdb::DoubleGrid::Ptr _grid;
+  mutable openvdb::DoubleGrid::Ptr _birth_grid;
   int _decay_model;
   double _background_value, _voxel_size, _voxel_decay;
   bool _pub_voxels;
   std::unique_ptr<std::vector<geometry_msgs::msg::Point32>> _grid_points;
   std::unordered_map<occupany_cell, uint> * _cost_map;
+  std::unordered_map<occupany_cell, double> * _birth_cost_map;
   boost::mutex _grid_lock;
 };
 

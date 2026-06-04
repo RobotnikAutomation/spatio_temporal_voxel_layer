@@ -53,7 +53,8 @@ SpatioTemporalVoxelGrid::SpatioTemporalVoxelGrid(
 : _clock(clock), _decay_model(decay_model), _background_value(background_value),
   _voxel_size(voxel_size), _voxel_decay(voxel_decay), _pub_voxels(pub_voxels),
   _grid_points(std::make_unique<std::vector<geometry_msgs::msg::Point32>>()),
-  _cost_map(new std::unordered_map<occupany_cell, uint>)
+  _cost_map(new std::unordered_map<occupany_cell, uint>),
+  _birth_cost_map(new std::unordered_map<occupany_cell, double>)
 /*****************************************************************************/
 {
   this->InitializeGrid();
@@ -66,6 +67,9 @@ SpatioTemporalVoxelGrid::~SpatioTemporalVoxelGrid(void)
   // pcl pointclouds free themselves
   if (_cost_map) {
     delete _cost_map;
+  }
+  if (_birth_cost_map) {
+    delete _birth_cost_map;
   }
 }
 
@@ -90,6 +94,12 @@ void SpatioTemporalVoxelGrid::InitializeGrid(void)
   _grid->setName("SpatioTemporalVoxelLayer");
   _grid->insertMeta("Voxel Size", openvdb::FloatMetadata(_voxel_size));
   _grid->setGridClass(openvdb::GRID_LEVEL_SET);
+
+  _birth_grid = openvdb::DoubleGrid::create(0.0);
+  _birth_grid->setTransform(_grid->transform().copy());
+  _birth_grid->setName("SpatioTemporalVoxelLayerBirthTime");
+  _birth_grid->insertMeta("Voxel Size", openvdb::FloatMetadata(_voxel_size));
+  _birth_grid->setGridClass(openvdb::GRID_LEVEL_SET);
 }
 
 /*****************************************************************************/
@@ -104,11 +114,13 @@ void SpatioTemporalVoxelGrid::ClearFrustums(
   if (this->IsGridEmpty()) {
     _grid_points->clear();
     _cost_map->clear();
+    _birth_cost_map->clear();
     return;
   }
 
   _grid_points->clear();
   _cost_map->clear();
+  _birth_cost_map->clear();
 
   std::vector<frustum_model> obs_frustums;
 
@@ -221,6 +233,7 @@ void SpatioTemporalVoxelGrid::TemporalClearAndGenerateCostmap(
 
   // free memory taken by expired voxels
   _grid->pruneGrid();
+  _birth_grid->pruneGrid();
 }
 
 /*****************************************************************************/
@@ -230,6 +243,7 @@ void SpatioTemporalVoxelGrid::PopulateCostmapAndPointcloud(
 {
   // add pt to the pointcloud and costmap
   openvdb::Vec3d pose_world = this->IndexToWorld(pt);
+  openvdb::DoubleGrid::Accessor birth_accessor = _birth_grid->getAccessor();
 
   if (_pub_voxels) {
     geometry_msgs::msg::Point32 point;
@@ -247,6 +261,17 @@ void SpatioTemporalVoxelGrid::PopulateCostmapAndPointcloud(
     _cost_map->insert(
       std::make_pair(
         occupany_cell(pose_world[0], pose_world[1]), 1));
+  }
+
+  if (birth_accessor.isValueOn(pt)) {
+    const occupany_cell key(pose_world[0], pose_world[1]);
+    const double birth_time = birth_accessor.getValue(pt);
+    auto birth_it = _birth_cost_map->find(key);
+    if (birth_it == _birth_cost_map->end()) {
+      _birth_cost_map->insert(std::make_pair(key, birth_time));
+    } else if (birth_time < birth_it->second) {
+      birth_it->second = birth_time;
+    }
   }
 }
 
@@ -273,6 +298,7 @@ void SpatioTemporalVoxelGrid::operator()(
   if (obs._marking) {
     float mark_range_2 = obs._obstacle_range_in_m * obs._obstacle_range_in_m;
     const double cur_time = _clock->now().seconds();
+    openvdb::DoubleGrid::Accessor birth_accessor = _birth_grid->getAccessor();
 
     const sensor_msgs::msg::PointCloud2 & cloud = *(obs._cloud);
     sensor_msgs::PointCloud2ConstIterator<float> iter_x(cloud, "x");
@@ -297,10 +323,17 @@ void SpatioTemporalVoxelGrid::operator()(
       openvdb::Vec3d mark_grid(this->WorldToIndex(
           openvdb::Vec3d(x, y, z)));
 
+      const openvdb::Coord mark_coord(
+        mark_grid[0],
+        mark_grid[1],
+        mark_grid[2]);
+
+      if (!birth_accessor.isValueOn(mark_coord)) {
+        birth_accessor.setValueOn(mark_coord, cur_time);
+      }
+
       if (!this->MarkGridPoint(
-          openvdb::Coord(
-            mark_grid[0], mark_grid[1],
-            mark_grid[2]), cur_time))
+          mark_coord, cur_time))
       {
         std::cout << "Failed to mark point." << std::endl;
       }
@@ -384,6 +417,8 @@ bool SpatioTemporalVoxelGrid::ResetGrid(void)
   // clear the voxel grid
   try {
     _grid->clear();
+    _birth_grid->clear();
+    _birth_cost_map->clear();
     if (this->IsGridEmpty()) {
       return true;
     }
@@ -435,11 +470,40 @@ bool SpatioTemporalVoxelGrid::ClearGridPoint(const openvdb::Coord & pt) const
 {
   // clearing the OpenVDB set
   openvdb::DoubleGrid::Accessor accessor = _grid->getAccessor();
+  openvdb::DoubleGrid::Accessor birth_accessor = _birth_grid->getAccessor();
 
   if (accessor.isValueOn(pt)) {
     accessor.setValueOff(pt, _background_value);
   }
-  return !accessor.isValueOn(pt);
+  if (birth_accessor.isValueOn(pt)) {
+    birth_accessor.setValueOff(pt, 0.0);
+  }
+  return !accessor.isValueOn(pt) && !birth_accessor.isValueOn(pt);
+}
+
+/*****************************************************************************/
+bool SpatioTemporalVoxelGrid::IsCellPastPersistenceDelay(
+  const double & x, const double & y,
+  const double & current_time, const double & persistence_delay) const
+/*****************************************************************************/
+{
+  if (persistence_delay <= 0.0) {
+    return true;
+  }
+
+  auto it = _birth_cost_map->find(occupany_cell(x, y));
+  if (it == _birth_cost_map->end()) {
+    return false;
+  }
+
+  return (current_time - it->second) >= persistence_delay;
+}
+
+/*****************************************************************************/
+openvdb::DoubleGrid::Ptr SpatioTemporalVoxelGrid::GetBirthGrid() const
+/*****************************************************************************/
+{
+  return _birth_grid;
 }
 
 /*****************************************************************************/
