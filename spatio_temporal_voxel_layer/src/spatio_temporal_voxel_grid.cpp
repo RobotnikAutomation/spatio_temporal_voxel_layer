@@ -45,6 +45,16 @@
 namespace volume_grid
 {
 
+namespace
+{
+std::string CoordToKey(const openvdb::Coord & coord)
+{
+  return std::to_string(coord.x()) + ":" +
+         std::to_string(coord.y()) + ":" +
+         std::to_string(coord.z());
+}
+}  // namespace
+
 /*****************************************************************************/
 SpatioTemporalVoxelGrid::SpatioTemporalVoxelGrid(
   rclcpp::Clock::SharedPtr clock,
@@ -281,6 +291,7 @@ void SpatioTemporalVoxelGrid::Mark(
 /*****************************************************************************/
 {
   boost::unique_lock<boost::mutex> lock(_grid_lock);
+  _observed_voxels.clear();
 
   // mark the grid
   if (marking_readings.size() > 0) {
@@ -288,11 +299,13 @@ void SpatioTemporalVoxelGrid::Mark(
       (*this)(marking_readings.at(i));
     }
   }
+
+  UpdateBirthGridForContinuousObservations();
 }
 
 /*****************************************************************************/
 void SpatioTemporalVoxelGrid::operator()(
-  const observation::MeasurementReading & obs) const
+  const observation::MeasurementReading & obs)
 /*****************************************************************************/
 {
   if (obs._marking) {
@@ -327,6 +340,7 @@ void SpatioTemporalVoxelGrid::operator()(
         mark_grid[0],
         mark_grid[1],
         mark_grid[2]);
+      _observed_voxels.insert(CoordToKey(mark_coord));
 
       if (!birth_accessor.isValueOn(mark_coord)) {
         birth_accessor.setValueOn(mark_coord, cur_time);
@@ -338,6 +352,25 @@ void SpatioTemporalVoxelGrid::operator()(
         std::cout << "Failed to mark point." << std::endl;
       }
     }
+  }
+}
+
+/*****************************************************************************/
+void SpatioTemporalVoxelGrid::UpdateBirthGridForContinuousObservations()
+/*****************************************************************************/
+{
+  openvdb::DoubleGrid::Accessor birth_accessor = _birth_grid->getAccessor();
+  std::vector<openvdb::Coord> to_clear;
+
+  for (openvdb::DoubleGrid::ValueOnCIter it = _birth_grid->cbeginValueOn(); it.test(); ++it) {
+    const openvdb::Coord coord = it.getCoord();
+    if (_observed_voxels.find(CoordToKey(coord)) == _observed_voxels.end()) {
+      to_clear.push_back(coord);
+    }
+  }
+
+  for (const auto & coord : to_clear) {
+    birth_accessor.setValueOff(coord, 0.0);
   }
 }
 
